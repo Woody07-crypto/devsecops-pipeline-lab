@@ -4,6 +4,6 @@ variable "aws_region" {
 }
 
 variable "bucket_name" {
-  description = "devscope-lab-chupisquad2026"
+  description = "devscope-lab-chupisquad2026-V2"
   type        = string
 }
