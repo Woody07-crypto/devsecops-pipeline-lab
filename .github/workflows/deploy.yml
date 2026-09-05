@@ -113,20 +113,27 @@ jobs:
       - name: Terraform Init
         run: terraform init
         working-directory: ./infra
-      - name: Importar bucket si ya existe
+      - name: Verificar identidad AWS
+        run: aws sts get-caller-identity
+      - name: Importar bucket si ya existe en ESTA cuenta
         working-directory: ./infra
         env:
           BUCKET: ${{ secrets.BUCKET_NAME }}
         run: |
-          if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
-            echo "El bucket ya existe; se importa al estado de Terraform (Actions no guarda .tfstate)."
-            terraform import -var="bucket_name=$BUCKET" aws_s3_bucket.site "$BUCKET" || true
-            terraform import -var="bucket_name=$BUCKET" aws_s3_bucket_public_access_block.site "$BUCKET" || true
-            terraform import -var="bucket_name=$BUCKET" aws_s3_bucket_website_configuration.site "$BUCKET" || true
-            terraform import -var="bucket_name=$BUCKET" aws_s3_bucket_policy.public_read "$BUCKET" || true
-            terraform import -var="bucket_name=$BUCKET" aws_s3_object.index "$BUCKET/index.html" || true
+          set +e
+          ERR=$(aws s3api head-bucket --bucket "$BUCKET" 2>&1)
+          CODE=$?
+          set -e
+          if [ $CODE -eq 0 ]; then
+            echo "El bucket ya existe en esta cuenta; se importa al estado."
+            terraform import -input=false -var="bucket_name=$BUCKET" aws_s3_bucket.site "$BUCKET"
+            terraform import -input=false -var="bucket_name=$BUCKET" aws_s3_bucket_public_access_block.site "$BUCKET" || true
+            terraform import -input=false -var="bucket_name=$BUCKET" aws_s3_bucket_website_configuration.site "$BUCKET" || true
+            terraform import -input=false -var="bucket_name=$BUCKET" aws_s3_bucket_policy.public_read "$BUCKET" || true
+            terraform import -input=false -var="bucket_name=$BUCKET" aws_s3_object.index "$BUCKET/index.html" || true
           else
-            echo "El bucket no existe; Terraform lo creará en apply."
+            echo "head-bucket exit=$CODE msg=$ERR"
+            echo "Se intentará crear el bucket (debe ser único y libre en AWS)."
           fi
       - name: Terraform Apply
         run: terraform apply -auto-approve -var="bucket_name=${{ secrets.BUCKET_NAME }}"
