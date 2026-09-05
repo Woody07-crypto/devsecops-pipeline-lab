@@ -108,11 +108,30 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
       - uses: hashicorp/setup-terraform@v3
-      - run: terraform init
+        with:
+          terraform_wrapper: false
+      - name: Terraform Init
+        run: terraform init
         working-directory: ./infra
-      - run: terraform apply -auto-approve -var="bucket_name=${{ secrets.BUCKET_NAME }}"
+      - name: Importar bucket si ya existe
         working-directory: ./infra
- 
+        env:
+          BUCKET: ${{ secrets.BUCKET_NAME }}
+        run: |
+          if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+            echo "El bucket ya existe; se importa al estado de Terraform (Actions no guarda .tfstate)."
+            terraform import -var="bucket_name=$BUCKET" aws_s3_bucket.site "$BUCKET" || true
+            terraform import -var="bucket_name=$BUCKET" aws_s3_bucket_public_access_block.site "$BUCKET" || true
+            terraform import -var="bucket_name=$BUCKET" aws_s3_bucket_website_configuration.site "$BUCKET" || true
+            terraform import -var="bucket_name=$BUCKET" aws_s3_bucket_policy.public_read "$BUCKET" || true
+            terraform import -var="bucket_name=$BUCKET" aws_s3_object.index "$BUCKET/index.html" || true
+          else
+            echo "El bucket no existe; Terraform lo creará en apply."
+          fi
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -var="bucket_name=${{ secrets.BUCKET_NAME }}"
+        working-directory: ./infra
+
   terraform-destroy:
     name: Destruir Infraestructura (Limpieza manual)
     runs-on: ubuntu-latest
@@ -125,7 +144,10 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
       - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
       - run: terraform init
         working-directory: ./infra
       - run: terraform destroy -auto-approve -var="bucket_name=${{ secrets.BUCKET_NAME }}"
         working-directory: ./infra
+

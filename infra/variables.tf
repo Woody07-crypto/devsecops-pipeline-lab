@@ -4,6 +4,6 @@ variable "aws_region" {
 }
 
 variable "bucket_name" {
-  description = "devscope-lab-chupisquad2026-V3"
+  description = "Nombre único global del bucket S3 (secret BUCKET_NAME). Actual: devscope-lab-chupisquad2026-v2"
   type        = string
 }
